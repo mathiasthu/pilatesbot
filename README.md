@@ -2,6 +2,13 @@
 
 An automated bot that books Pilates sessions on Acuity Scheduling for "Midday Flow" classes every Monday, Thursday, and Saturday at 3:40 PM.
 
+## 🚀 Quick Start Guides
+
+**Choose your platform:**
+- **[MacBook Setup Guide](MACBOOK_SETUP.md)** ← Start here if using a Mac
+- **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - VPS, Raspberry Pi, Windows, Linux
+- **[Quick Start](QUICKSTART.md)** - 5-minute overview
+
 ## Features
 
 - **Automated Booking**: Books sessions for the upcoming week automatically
