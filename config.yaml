@@ -1,0 +1,41 @@
+# Pilates Booking Bot Configuration
+
+# Booking URL
+booking_url: "https://app.acuityscheduling.com/schedule/e5c206fe?ref=ig_integration"
+
+# User Information
+user_info:
+  first_name: "Thoon"
+  last_name: "Nay"
+  phone: "+4540161703"
+  email: "fidomathias078@gmail.com"
+
+# Session Details
+session:
+  name: "Midday Flow"
+  time: "3:40 PM"
+  days:
+    - "Monday"
+    - "Thursday"
+    - "Saturday"
+
+# Booking Settings
+booking:
+  # How many weeks in advance to book (1 = next week)
+  weeks_ahead: 1
+
+  # Alternative session preferences if preferred time not available
+  allow_alternatives: true
+  # Acceptable time range for alternatives (in minutes before/after preferred time)
+  alternative_time_range: 120  # 2 hours
+
+  # Wait for confirmation before booking alternatives
+  require_confirmation: true
+
+# Browser Settings
+browser:
+  headless: false  # Set to true for production
+  timeout: 30000  # 30 seconds
+
+# Timezone
+timezone: "Asia/Ho_Chi_Minh"  # Vietnam/Da Nang
