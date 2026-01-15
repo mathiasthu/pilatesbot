@@ -1,9 +1,10 @@
 """
-WhatsApp notification handler for the Pilates booking bot.
+Telegram notification handler for the Pilates booking bot.
 """
 
 import os
 import logging
+import asyncio
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -13,35 +14,33 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-class WhatsAppNotifier:
-    """Handle WhatsApp notifications using Twilio API."""
+class TelegramNotifier:
+    """Handle Telegram notifications using python-telegram-bot."""
 
     def __init__(self):
         self.enabled = os.getenv('ENABLE_NOTIFICATIONS', 'false').lower() == 'true'
-        self.account_sid = os.getenv('TWILIO_ACCOUNT_SID')
-        self.auth_token = os.getenv('TWILIO_AUTH_TOKEN')
-        self.from_number = os.getenv('TWILIO_WHATSAPP_FROM')
-        self.to_number = os.getenv('WHATSAPP_TO')
+        self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+        self.chat_id = os.getenv('TELEGRAM_CHAT_ID')
 
-        self.client = None
+        self.bot = None
         if self.enabled:
             try:
-                from twilio.rest import Client
-                if all([self.account_sid, self.auth_token, self.from_number, self.to_number]):
-                    self.client = Client(self.account_sid, self.auth_token)
-                    logger.info("WhatsApp notifications enabled")
+                from telegram import Bot
+                if self.bot_token and self.chat_id:
+                    self.bot = Bot(token=self.bot_token)
+                    logger.info("Telegram notifications enabled")
                 else:
-                    logger.warning("WhatsApp notifications enabled but credentials missing")
+                    logger.warning("Telegram notifications enabled but credentials missing")
                     self.enabled = False
             except ImportError:
-                logger.warning("Twilio library not installed. Install with: pip install twilio")
+                logger.warning("python-telegram-bot library not installed. Install with: pip install python-telegram-bot")
                 self.enabled = False
         else:
-            logger.info("WhatsApp notifications disabled")
+            logger.info("Telegram notifications disabled")
 
-    def send_message(self, message: str) -> bool:
+    async def send_message_async(self, message: str) -> bool:
         """
-        Send a WhatsApp message.
+        Send a Telegram message asynchronously.
 
         Args:
             message: The message to send
@@ -49,20 +48,45 @@ class WhatsAppNotifier:
         Returns:
             True if message sent successfully, False otherwise
         """
-        if not self.enabled or not self.client:
+        if not self.enabled or not self.bot:
             logger.info(f"[NOTIFICATION SKIPPED] {message}")
             return False
 
         try:
-            msg = self.client.messages.create(
-                body=message,
-                from_=self.from_number,
-                to=self.to_number
+            await self.bot.send_message(
+                chat_id=self.chat_id,
+                text=message,
+                parse_mode='HTML'
             )
-            logger.info(f"WhatsApp message sent: {msg.sid}")
+            logger.info("Telegram message sent successfully")
             return True
         except Exception as e:
-            logger.error(f"Failed to send WhatsApp message: {e}")
+            logger.error(f"Failed to send Telegram message: {e}")
+            return False
+
+    def send_message(self, message: str) -> bool:
+        """
+        Send a Telegram message (synchronous wrapper).
+
+        Args:
+            message: The message to send
+
+        Returns:
+            True if message sent successfully, False otherwise
+        """
+        if not self.enabled or not self.bot:
+            logger.info(f"[NOTIFICATION SKIPPED] {message}")
+            return False
+
+        try:
+            # Run async function in event loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(self.send_message_async(message))
+            loop.close()
+            return result
+        except Exception as e:
+            logger.error(f"Failed to send Telegram message: {e}")
             return False
 
     def notify_alternative_needed(self, day: str, preferred_time: str, alternatives: list) -> bool:
@@ -77,13 +101,13 @@ class WhatsAppNotifier:
         Returns:
             True if notification sent successfully
         """
-        alt_list = "\n".join([f"- {alt['time']}" for alt in alternatives])
-        message = f"""🧘‍♀️ Pilates Booking Alert
+        alt_list = "\n".join([f"• {alt['time']}" for alt in alternatives])
+        message = f"""🧘‍♀️ <b>Pilates Booking Alert</b>
 
-Preferred session not available:
+<b>Preferred session not available:</b>
 {day} at {preferred_time}
 
-Available alternatives:
+<b>Available alternatives:</b>
 {alt_list}
 
 Please confirm which session to book or if none are suitable."""
@@ -100,10 +124,10 @@ Please confirm which session to book or if none are suitable."""
         Returns:
             True if notification sent successfully
         """
-        booking_list = "\n".join([f"✓ {b['day']} at {b['time']}" for b in bookings])
-        message = f"""✅ Pilates Sessions Booked Successfully!
+        booking_list = "\n".join([f"✅ {b['day']} at {b['time']}" for b in bookings])
+        message = f"""✅ <b>Pilates Sessions Booked Successfully!</b>
 
-Your sessions for next week:
+<b>Your sessions for next week:</b>
 {booking_list}
 
 See you on the mat! 🧘‍♀️"""
@@ -120,16 +144,16 @@ See you on the mat! 🧘‍♀️"""
         Returns:
             True if notification sent successfully
         """
-        message = f"""❌ Pilates Booking Error
+        message = f"""❌ <b>Pilates Booking Error</b>
 
 There was an issue booking your sessions:
-{error_msg}
+<code>{error_msg}</code>
 
 Please check the logs or book manually."""
 
         return self.send_message(message)
 
 
-def get_notifier() -> WhatsAppNotifier:
-    """Get a WhatsApp notifier instance."""
-    return WhatsAppNotifier()
+def get_notifier() -> TelegramNotifier:
+    """Get a Telegram notifier instance."""
+    return TelegramNotifier()

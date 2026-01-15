@@ -7,7 +7,7 @@ An automated bot that books Pilates sessions on Acuity Scheduling for "Midday Fl
 - **Automated Booking**: Books sessions for the upcoming week automatically
 - **Smart Scheduling**: Runs every Monday at 12:01 AM (Vietnam time) to secure spots 1 week in advance
 - **Alternative Session Detection**: Finds alternative times if preferred slot is unavailable
-- **WhatsApp Notifications**: Sends alerts for successful bookings, alternatives needing confirmation, or errors
+- **Telegram Notifications**: Sends alerts for successful bookings, alternatives needing confirmation, or errors
 - **Robust Error Handling**: Comprehensive logging and error recovery
 - **Configurable**: Easy to customize via YAML configuration file
 
@@ -15,7 +15,7 @@ An automated bot that books Pilates sessions on Acuity Scheduling for "Midday Fl
 
 - Python 3.8 or higher
 - Internet connection
-- (Optional) Twilio account for WhatsApp notifications
+- (Optional) Telegram account for notifications
 
 ## Installation
 
@@ -36,7 +36,7 @@ An automated bot that books Pilates sessions on Acuity Scheduling for "Midday Fl
 
 4. **Configure the bot:**
    - Review and modify `config.yaml` if needed (user info is already set)
-   - Copy `.env.example` to `.env` and add your Twilio credentials (optional):
+   - Copy `.env.example` to `.env` and add your Telegram credentials (optional):
      ```bash
      cp .env.example .env
      nano .env  # Edit with your credentials
@@ -55,20 +55,24 @@ The main configuration file contains:
 - **browser**: Headless mode and timeout settings
 - **timezone**: Set to Asia/Ho_Chi_Minh (Vietnam)
 
-### WhatsApp Notifications (Optional)
+### Telegram Notifications (Optional)
 
-To enable WhatsApp notifications:
+To enable Telegram notifications:
 
-1. Sign up for [Twilio](https://www.twilio.com/)
-2. Get a WhatsApp-enabled phone number
-3. Update `.env` with your credentials:
+1. Open Telegram and search for **@BotFather**
+2. Send `/newbot` and follow the prompts to create your bot
+3. Save the **Bot Token** provided by BotFather
+4. Start a chat with your bot and send any message
+5. Get your **Chat ID** from: `https://api.telegram.org/botYOUR_BOT_TOKEN/getUpdates`
+6. Update `.env` with your credentials:
    ```
-   TWILIO_ACCOUNT_SID=your_account_sid
-   TWILIO_AUTH_TOKEN=your_auth_token
-   TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
-   WHATSAPP_TO=whatsapp:+4540161703
+   TELEGRAM_BOT_TOKEN=your_bot_token_here
+   TELEGRAM_CHAT_ID=your_chat_id_here
    ENABLE_NOTIFICATIONS=true
    ```
+7. Test notifications: `python3 test_telegram.py`
+
+See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md#-setup-telegram-bot-required-for-all-options) for detailed instructions.
 
 ## Usage
 
@@ -167,12 +171,13 @@ Check logs for errors:
 tail -f cron.log
 ```
 
-### WhatsApp notifications not working
+### Telegram notifications not working
 
-1. Verify credentials in `.env`
+1. Verify credentials in `.env` (bot token and chat ID)
 2. Check `ENABLE_NOTIFICATIONS=true`
-3. Ensure Twilio account is active and WhatsApp sandbox is approved
-4. Check logs for Twilio API errors
+3. Ensure you've sent a message to your bot (click "Start" button)
+4. Test with: `python3 test_telegram.py`
+5. Check logs for error messages: `tail pilates_bot.log`
 
 ## How It Works
 
@@ -184,7 +189,7 @@ tail -f cron.log
 6. **Form Filling**: Enters name, phone, email
 7. **Submission**: Submits the booking and waits for confirmation
 8. **Alternative Handling**: If preferred time unavailable, finds alternatives and notifies
-9. **Notifications**: Sends WhatsApp messages for success, alternatives, or errors
+9. **Notifications**: Sends Telegram messages for success, alternatives, or errors
 10. **Logging**: Records all actions and outcomes
 
 ## Booking Logic

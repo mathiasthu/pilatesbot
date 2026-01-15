@@ -2,6 +2,13 @@
 
 Get the Pilates booking bot up and running in 5 minutes!
 
+## Where Should I Run This?
+
+**Need help deciding where to run the bot?** See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for detailed options:
+- VPS/Cloud Server (most reliable) - $5/month
+- Raspberry Pi (one-time $50)
+- Your computer (free)
+
 ## Step 1: Install Dependencies
 
 ```bash
@@ -9,118 +16,187 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
-## Step 2: Test Your Setup
+## Step 2: Setup Telegram Bot (5 minutes)
+
+The bot sends you notifications via Telegram. Follow these steps:
+
+### Create a Telegram Bot
+
+1. Open Telegram and search for **@BotFather**
+2. Send: `/newbot`
+3. Follow prompts to name your bot (e.g., "Pilates Booking Bot")
+4. Save the **Bot Token** (looks like: `123456789:ABCdefGHI...`)
+
+### Get Your Chat ID
+
+1. Search for your bot and send it a message: "Hello"
+2. Open this URL in browser (replace YOUR_BOT_TOKEN):
+   ```
+   https://api.telegram.org/botYOUR_BOT_TOKEN/getUpdates
+   ```
+3. Find `"chat":{"id":123456789` - this is your **Chat ID**
+
+### Configure Bot
+
+```bash
+cp .env.example .env
+nano .env  # or use any text editor
+```
+
+Add your credentials:
+```
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
+ENABLE_NOTIFICATIONS=true
+```
+
+## Step 3: Test Telegram Notifications
+
+```bash
+python3 test_telegram.py
+```
+
+You should receive a test message on Telegram! If not, check your token and chat ID.
+
+## Step 4: Test Bot Setup
 
 ```bash
 python3 test_setup.py
 ```
 
-This will verify:
+This verifies:
 - Configuration is valid
 - All dependencies are installed
-- Timezone is correct
-- Target dates are calculated properly
+- Timezone is correct (Vietnam)
+- Target booking dates are calculated properly
 
-## Step 3: Run a Test Booking (Manual)
+All checks should pass ✓
 
-**IMPORTANT**: This will attempt to book actual sessions! Only run if you're ready to book.
+## Step 5: Run a Test Booking (Manual)
+
+**⚠️ IMPORTANT**: This will attempt to book actual sessions! Only run when ready.
 
 ```bash
 python3 pilates_bot.py
 ```
 
 The bot will:
-- Open a browser window (you can watch the process)
+- Open a browser window (you can watch it work)
 - Navigate to Acuity Scheduling
-- Attempt to book Mon/Thu/Sat sessions for next week
-- Log all actions to `pilates_bot.log`
+- Try to book Mon/Thu/Sat sessions for next week at 3:40 PM
+- Fill in Thoon Nay's information
+- Log everything to `pilates_bot.log`
 
-## Step 4: Set Up Automated Scheduling
+Watch the browser and check if it successfully:
+1. Finds "Midday Flow"
+2. Selects dates and times
+3. Fills the form
+4. Submits bookings
 
-Once you've verified the bot works, set up the weekly cron job:
+## Step 6: Set Up Automated Weekly Scheduling
 
+Once you've verified it works, automate it!
+
+**Linux/Mac/VPS:**
 ```bash
 ./setup_cron.sh
 ```
 
-Press Enter to accept the default schedule (Monday 12:01 AM), or enter a custom cron expression.
+Press Enter to accept default (Monday 12:01 AM).
+
+**Windows:**
+See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md#setup---windows) for Task Scheduler setup.
 
 ## Verification
 
-Check that the cron job is scheduled:
-
+**Check cron job is scheduled:**
 ```bash
 crontab -l
 ```
 
-You should see a line like:
+Should show:
 ```
-1 0 * * 1 cd /home/user/pilatesbot && /usr/bin/python3 pilates_bot.py >> /home/user/pilatesbot/cron.log 2>&1
+1 0 * * 1 cd /home/user/pilatesbot && python3 pilates_bot.py >> cron.log 2>&1
 ```
 
-## Next Week's Schedule
+## What Gets Booked?
 
-The bot will automatically book these sessions:
+The bot automatically books these sessions **1 week in advance**:
 
 - **Monday** at 3:40 PM - Midday Flow
 - **Thursday** at 3:40 PM - Midday Flow
 - **Saturday** at 3:40 PM - Midday Flow
 
-All bookings are for **1 week in advance** (next week's sessions).
+**When:** Every Monday at 12:01 AM Vietnam time
+**For:** Thoon Nay (+4540161703, fidomathias078@gmail.com)
 
-## Enable WhatsApp Notifications (Optional)
+## Monitoring
 
-1. Copy the environment template:
-   ```bash
-   cp .env.example .env
-   ```
+**View logs:**
+```bash
+tail -f pilates_bot.log  # Main log
+tail -f cron.log          # Cron execution log
+```
 
-2. Edit `.env` and add your Twilio credentials:
-   ```bash
-   nano .env
-   ```
+**Check what will be booked:**
+```bash
+python3 test_setup.py
+```
 
-3. Set `ENABLE_NOTIFICATIONS=true` and add your Twilio account details
-
-4. Test notifications by running the bot manually
+Shows target dates for next booking.
 
 ## Troubleshooting
 
-### Bot doesn't find sessions
+### Telegram not working
+```bash
+# Test again
+python3 test_telegram.py
 
-1. Set `headless: false` in `config.yaml` to watch the browser
+# Check .env file has correct token and chat ID
+cat .env
+```
+
+### Bot can't find sessions
+
+1. Set `headless: false` in `config.yaml` to watch browser
 2. Check `pilates_bot.log` for errors
-3. Verify the Acuity Scheduling URL is still valid
-4. Website structure may have changed - update selectors in `pilates_bot.py`
+3. Website structure may have changed - see logs for which selector failed
 
 ### Cron job not running
 
 ```bash
-# Check cron service
+# Verify cron is set up
+crontab -l
+
+# Check cron service (Linux)
 sudo service cron status
 
-# View cron logs
+# View cron execution log
 tail -f cron.log
 ```
 
 ## Important Notes
 
-- The bot books **1 week in advance** to secure the limited 4 spots per session
-- It runs every **Monday at 12:01 AM** Vietnam time
-- Sessions are for **Thoon Nay** with the configured contact info
-- Alternative sessions require confirmation before booking (configurable)
+✓ Books **1 week ahead** to secure the 4 limited spots per session
+✓ Runs **Monday 12:01 AM** Vietnam time automatically
+✓ Sends **Telegram notifications** for success/failures/alternatives
+✓ Logs everything for troubleshooting
 
 ## What's Next?
 
-The bot is now fully automated! It will:
+**You're done!** The bot is now fully automated and will:
 
-1. Wake up every Monday at 12:01 AM
-2. Book next week's Mon/Thu/Sat sessions
-3. Send WhatsApp notifications (if configured)
-4. Log everything to `pilates_bot.log` and `cron.log`
+1. ⏰ Wake up every Monday at 12:01 AM
+2. 🎯 Book next week's Mon/Thu/Sat sessions
+3. 📱 Send Telegram notifications
+4. 📝 Log all actions
 
-**You don't need to do anything else!** Just check the logs occasionally to ensure bookings are successful.
+**Just check Telegram or logs occasionally to ensure bookings succeed!**
 
 ---
 
-For detailed documentation, see [README.md](README.md)
+## More Information
+
+- **Full Documentation:** [README.md](README.md)
+- **Deployment Options:** [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+- **Telegram Setup:** [DEPLOYMENT_GUIDE.md#-setup-telegram-bot-required-for-all-options](DEPLOYMENT_GUIDE.md#-setup-telegram-bot-required-for-all-options)
