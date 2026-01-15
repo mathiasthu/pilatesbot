@@ -94,7 +94,7 @@ class PilatesBookingBot:
 
     async def select_appointment_type(self, page: Page) -> bool:
         """
-        Select the appointment type (e.g., 'Midday Flow').
+        Select the appointment type by clicking the BOOK button for Midday Flow.
 
         Args:
             page: Playwright page object
@@ -106,13 +106,37 @@ class PilatesBookingBot:
         logger.info(f"Looking for session type: {session_name}")
 
         try:
-            # Wait for appointment types to load
-            await page.wait_for_selector('text=' + session_name, timeout=10000)
+            # Wait for the page to load
+            await page.wait_for_load_state('networkidle')
+            await page.wait_for_timeout(2000)
 
-            # Click on the session type
-            await page.click(f'text={session_name}')
-            logger.info(f"Selected appointment type: {session_name}")
+            # Find all BOOK buttons
+            book_buttons = await page.locator('text=BOOK').all()
+            logger.info(f"Found {len(book_buttons)} BOOK buttons on page")
+
+            # Midday Flow is the 5th button (index 4) based on the page layout
+            # Order: Foundations Flow, Core Revival, Midday Flow (position varies)
+            # We need to find it dynamically instead
+
+            # Look for the section containing "Midday Flow" text and click its BOOK button
+            midday_section = page.locator(f'text="{session_name}"').locator('xpath=ancestor::*[contains(@class, "appointment") or contains(@class, "service")]').first
+
+            if await midday_section.count() > 0:
+                # Find BOOK button within this section
+                book_btn = midday_section.locator('text=BOOK').first
+                await book_btn.click()
+                logger.info(f"Clicked BOOK button for {session_name}")
+            else:
+                # Fallback: click 5th BOOK button (index 4) - Midday Flow position
+                if len(book_buttons) >= 5:
+                    await book_buttons[4].click()
+                    logger.info(f"Clicked 5th BOOK button (assumed {session_name})")
+                else:
+                    logger.error(f"Could not find {session_name} section")
+                    return False
+
             await self.wait_for_page_load(page)
+            logger.info("Successfully navigated to booking page")
             return True
 
         except Exception as e:
@@ -121,7 +145,7 @@ class PilatesBookingBot:
 
     async def select_date_and_time(self, page: Page, target_date: datetime) -> bool:
         """
-        Select a specific date and time for the session.
+        Select a specific date and time for the session on Acuity's Date & Time page.
 
         Args:
             page: Playwright page object
@@ -134,67 +158,82 @@ class PilatesBookingBot:
         logger.info(f"Attempting to book {target_date.strftime('%A, %B %d')} at {preferred_time}")
 
         try:
-            # Look for the calendar/date picker
-            # This is site-specific and may need adjustment based on Acuity's UI
+            # Wait for the Date & Time page to load
+            await page.wait_for_timeout(3000)
 
-            # Try to find and click on the target date
-            date_text = target_date.strftime('%B %d, %Y')  # e.g., "January 20, 2026"
-            date_selector = f'text={date_text}'
+            # Format the date as it appears on the page (e.g., "Jan 19")
+            date_str_short = target_date.strftime('%b %d').replace(' 0', ' ')  # "Jan 19" not "Jan 09"
+            date_str_full = target_date.strftime('%B %d')  # "January 19"
 
-            # Alternative: look for date in various formats
-            day_num = target_date.strftime('%d').lstrip('0')  # Remove leading zero
+            logger.info(f"Looking for date: {date_str_short} or {date_str_full}")
 
-            # Wait for calendar to be visible
-            await page.wait_for_timeout(2000)
+            # Try to find the date column
+            # The page shows dates like "Monday\nJan 19"
+            date_found = False
 
-            # Try clicking on the date - Acuity typically uses a calendar widget
-            # We may need to navigate to the correct month first
-            date_clicked = False
+            # Strategy 1: Look for the date text and click the time slot below it
+            try:
+                # Find element containing the date
+                date_element = page.locator(f'text={date_str_short}').first
 
-            # Try multiple selectors for the date
-            selectors = [
-                f'[aria-label*="{target_date.strftime("%A, %B %d")}"]',
-                f'button:has-text("{day_num}")',
-                f'a:has-text("{day_num}")',
-                f'text={day_num}'
-            ]
+                if await date_element.count() > 0:
+                    logger.info(f"Found date element for {date_str_short}")
 
-            for selector in selectors:
+                    # Find the parent container for this date
+                    date_container = date_element.locator('xpath=ancestor::*[contains(@class, "day") or contains(@class, "date") or parent::div]').first
+
+                    # Look for the time slot button (e.g., "3:40 PM")
+                    time_button = date_container.locator(f'text={preferred_time}').first
+
+                    if await time_button.count() > 0:
+                        await time_button.click()
+                        logger.info(f"Clicked time slot: {preferred_time} for {date_str_short}")
+                        date_found = True
+                        await page.wait_for_timeout(2000)
+                    else:
+                        logger.warning(f"Time slot {preferred_time} not found for {date_str_short}")
+                else:
+                    logger.warning(f"Date {date_str_short} not visible on page")
+
+            except Exception as e:
+                logger.warning(f"Strategy 1 failed: {e}")
+
+            # Strategy 2: If strategy 1 failed, look for any element with both date and time
+            if not date_found:
                 try:
-                    elements = await page.query_selector_all(selector)
-                    if elements:
-                        await elements[0].click()
-                        date_clicked = True
-                        logger.info(f"Clicked date using selector: {selector}")
-                        break
-                except:
-                    continue
+                    # Find all time slot buttons
+                    time_slots = await page.locator(f'text={preferred_time}').all()
+                    logger.info(f"Found {len(time_slots)} time slots with {preferred_time}")
 
-            if not date_clicked:
-                logger.warning("Could not click date, may already be on date selection")
+                    # Try each one and see if it's for our target date
+                    for slot in time_slots:
+                        # Get the text context around this slot
+                        parent = slot.locator('xpath=ancestor::*[3]').first
+                        parent_text = await parent.inner_text() if await parent.count() > 0 else ""
 
-            await self.wait_for_page_load(page)
+                        # Check if this parent contains our target date
+                        if date_str_short in parent_text or date_str_full in parent_text:
+                            await slot.click()
+                            logger.info(f"Clicked time slot using strategy 2")
+                            date_found = True
+                            await page.wait_for_timeout(2000)
+                            break
 
-            # Now look for the time slot
-            time_clicked = await self.select_time_slot(page, preferred_time)
+                except Exception as e2:
+                    logger.warning(f"Strategy 2 failed: {e2}")
 
-            if not time_clicked:
-                # Try to find alternative times
+            if not date_found:
+                logger.error(f"Could not find and click time slot for {target_date.strftime('%A %b %d')} at {preferred_time}")
+
+                # Try to find alternatives
                 if self.config['booking']['allow_alternatives']:
-                    logger.info("Preferred time not available, looking for alternatives")
-                    alternatives = await self.find_alternative_times(page, preferred_time)
+                    logger.info("Looking for alternative time slots")
+                    alternatives = await self.find_alternative_times(page, target_date)
 
                     if alternatives and self.config['booking']['require_confirmation']:
-                        # Send notification for confirmation
                         day_name = target_date.strftime('%A')
                         self.notifier.notify_alternative_needed(day_name, preferred_time, alternatives)
-                        logger.info("Alternative session notification sent, skipping booking")
-                        return False
-                    elif alternatives:
-                        # Book the first alternative
-                        await self.select_time_slot(page, alternatives[0]['time'])
-                        logger.info(f"Booked alternative time: {alternatives[0]['time']}")
-                        return True
+                        logger.info("Alternative session notification sent")
 
                 return False
 
@@ -204,88 +243,50 @@ class PilatesBookingBot:
             logger.error(f"Failed to select date and time: {e}")
             return False
 
-    async def select_time_slot(self, page: Page, time_str: str) -> bool:
+    async def find_alternative_times(self, page: Page, target_date: datetime) -> List[Dict[str, str]]:
         """
-        Click on a specific time slot.
+        Find alternative time slots for the target date if preferred time not available.
 
         Args:
             page: Playwright page object
-            time_str: Time string (e.g., "3:40 PM")
-
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            # Look for the time slot button/link
-            # Acuity typically shows times as clickable elements
-            time_selectors = [
-                f'button:has-text("{time_str}")',
-                f'a:has-text("{time_str}")',
-                f'[aria-label*="{time_str}"]',
-                f'text={time_str}'
-            ]
-
-            for selector in time_selectors:
-                try:
-                    element = await page.query_selector(selector)
-                    if element:
-                        # Check if the slot is available (not disabled or fully booked)
-                        is_disabled = await element.get_attribute('disabled')
-                        class_name = await element.get_attribute('class') or ''
-
-                        if not is_disabled and 'disabled' not in class_name.lower() and 'full' not in class_name.lower():
-                            await element.click()
-                            logger.info(f"Selected time slot: {time_str}")
-                            await self.wait_for_page_load(page)
-                            return True
-                        else:
-                            logger.warning(f"Time slot {time_str} is not available")
-                            return False
-                except:
-                    continue
-
-            logger.warning(f"Time slot {time_str} not found")
-            return False
-
-        except Exception as e:
-            logger.error(f"Error selecting time slot: {e}")
-            return False
-
-    async def find_alternative_times(self, page: Page, preferred_time: str) -> List[Dict[str, str]]:
-        """
-        Find alternative time slots if the preferred time is not available.
-
-        Args:
-            page: Playwright page object
-            preferred_time: The preferred time that wasn't available
+            target_date: The target date
 
         Returns:
             List of alternative time slots
         """
         alternatives = []
+        date_str_short = target_date.strftime('%b %d').replace(' 0', ' ')
 
         try:
-            # Look for all available time slots on the page
-            time_elements = await page.query_selector_all('button[class*="time"], a[class*="time"]')
+            # Look for all time buttons on the page
+            time_pattern = r'\d{1,2}:\d{2}\s*(AM|PM)'
+            time_elements = await page.locator('button, a').all()
 
             for element in time_elements:
                 try:
                     text = await element.inner_text()
-                    is_disabled = await element.get_attribute('disabled')
-                    class_name = await element.get_attribute('class') or ''
+                    parent_text = ""
 
-                    # Check if this is an available time slot
-                    if not is_disabled and 'disabled' not in class_name.lower() and 'full' not in class_name.lower():
-                        # Extract time from text (e.g., "3:40 PM")
-                        if 'AM' in text or 'PM' in text:
+                    # Get parent context
+                    parent = element.locator('xpath=ancestor::*[3]').first
+                    if await parent.count() > 0:
+                        parent_text = await parent.inner_text()
+
+                    # Check if this is a time slot for our target date
+                    if date_str_short in parent_text and ('AM' in text or 'PM' in text):
+                        # Check if slot is available
+                        is_disabled = await element.get_attribute('disabled')
+                        class_name = await element.get_attribute('class') or ''
+
+                        if not is_disabled and 'disabled' not in class_name.lower():
                             alternatives.append({
                                 'time': text.strip(),
-                                'element': element
+                                'date': date_str_short
                             })
                 except:
                     continue
 
-            logger.info(f"Found {len(alternatives)} alternative time slots")
+            logger.info(f"Found {len(alternatives)} alternative time slots for {date_str_short}")
             return alternatives[:5]  # Return up to 5 alternatives
 
         except Exception as e:
@@ -307,14 +308,15 @@ class PilatesBookingBot:
 
         try:
             # Wait for the form to be visible
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(3000)
 
             # Fill in first name
             first_name_selectors = [
                 'input[name*="firstName"]',
                 'input[name*="first"]',
                 'input[id*="firstName"]',
-                'input[placeholder*="First"]'
+                'input[placeholder*="First"]',
+                'input[type="text"]'
             ]
             await self.fill_field(page, first_name_selectors, user_info['first_name'], "First Name")
 
@@ -394,7 +396,8 @@ class PilatesBookingBot:
                 'button:has-text("Book")',
                 'button:has-text("Confirm")',
                 'input[type="submit"]',
-                'button:has-text("Submit")'
+                'button:has-text("Submit")',
+                'button:has-text("Continue")'
             ]
 
             for selector in submit_selectors:
@@ -414,7 +417,8 @@ class PilatesBookingBot:
                             'confirmed',
                             'successfully',
                             'thank you',
-                            'booked'
+                            'booked',
+                            'scheduled'
                         ]
 
                         if any(indicator in page_content.lower() for indicator in success_indicators):
@@ -423,7 +427,8 @@ class PilatesBookingBot:
                         else:
                             # Take screenshot for debugging
                             await page.screenshot(path=f'booking_result_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
-                            return True  # Assume success if no error shown
+                            logger.info("Booking appears successful (screenshot saved)")
+                            return True
 
                 except:
                     continue
@@ -453,7 +458,7 @@ class PilatesBookingBot:
             await page.goto(booking_url)
             await self.wait_for_page_load(page)
 
-            # Select appointment type
+            # Select appointment type (click BOOK button for Midday Flow)
             if not await self.select_appointment_type(page):
                 return False
 
@@ -505,7 +510,7 @@ class PilatesBookingBot:
 
                 context = await browser.new_context(
                     viewport={'width': 1920, 'height': 1080},
-                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
                 )
 
                 page = await context.new_page()
