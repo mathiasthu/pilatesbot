@@ -77,11 +77,11 @@ cd ~/pilatesbot
 # Install required Python packages
 pip3 install -r requirements.txt
 
-# Install Playwright browsers
-playwright install chromium
+# Install Playwright browsers (use python3 -m to avoid PATH issues)
+python3 -m playwright install chromium
 
-# Install Playwright system dependencies (if needed)
-playwright install-deps chromium
+# Install Playwright system dependencies (if needed on Mac)
+python3 -m playwright install-deps chromium
 ```
 
 This may take a few minutes to download everything.
@@ -433,7 +433,9 @@ brew install python@3.11
 ```bash
 # Install Playwright
 pip3 install playwright
-playwright install chromium
+
+# Use python3 -m to run playwright (avoids PATH issues)
+python3 -m playwright install chromium
 ```
 
 ### Cron job not running
@@ -574,7 +576,7 @@ pip3 install -r requirements.txt
 - [ ] Python 3.11+ installed
 - [ ] Repository cloned to `~/pilatesbot`
 - [ ] Dependencies installed (`pip3 install -r requirements.txt`)
-- [ ] Playwright browsers installed (`playwright install chromium`)
+- [ ] Playwright browsers installed (`python3 -m playwright install chromium`)
 - [ ] Telegram bot created with @BotFather
 - [ ] `.env` file configured with bot token and chat ID
 - [ ] `test_setup.py` passes all checks

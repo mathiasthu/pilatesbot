@@ -13,8 +13,10 @@ Get the Pilates booking bot up and running in 5 minutes!
 
 ```bash
 pip install -r requirements.txt
-playwright install chromium
+python3 -m playwright install chromium
 ```
+
+**Note:** On Mac, use `pip3` instead of `pip` if you get errors.
 
 ## Step 2: Setup Telegram Bot (5 minutes)
 
